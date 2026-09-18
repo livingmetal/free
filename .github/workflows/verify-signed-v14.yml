@@ -1,0 +1,46 @@
+name: Verify signed v1.4 APK upgrade
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'release/**'
+      - '.github/workflows/verify-signed-v14.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Download tested build and previous signed release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh run download 35352160697 --repo livingmetal/free --name SalaryTimer-v1.4.0-tested-build --dir source-build
+          gh run download 35349621692 --repo livingmetal/free --name SalaryTimer-v1.3.0-verified --dir old
+      - name: Reconstruct exact public signed APK without private key
+        run: python3 release/apply-recipe.py source-build/SalaryTimer-v1.4.0-unsigned.apk release/v14-recipe dist/SalaryTimer-v1.4.0.apk
+      - name: Verify final APK installation and settings upgrade on Android 16
+        run: bash release/verify-v14.sh
+      - name: Upload verified installable APK
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: SalaryTimer-v1.4.0-verified-APK
+          path: dist/
+          if-no-files-found: error
+          retention-days: 30
+      - name: Upload diagnostics on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: v14-upgrade-diagnostics
+          path: dist/checks/
+          if-no-files-found: ignore
