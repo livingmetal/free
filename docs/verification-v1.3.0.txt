@@ -1,0 +1,30 @@
+Salary Timer 1.3.0 verification, 2026-09-18
+Source commit: c453dc1d6ab6a12882150d8c4e7ae22efeac1a1c
+GitHub Actions run: 35349621692
+Verified artifact: 10548597401 (SalaryTimer-v1.3.0-verified)
+APK filename: SalaryTimer-v1.3.0.apk
+APK size: 6484422 bytes
+APK SHA-256: bdddb1036e53c979541e81e108422db1a2057ed6f9f1ff5fe3259f77f8feaffa
+Package: com.livingmetal.salarytimer.personal
+Version: 1.3.0, versionCode 13, minSdk 26, targetSdk 35
+Release build: non-debuggable
+Certificate SHA-256: db0f4ce9e54b59070c34d9aa81767b5e228bc2661db05b5fdd975af97b60496c
+APK v2 and v3 signature verification: PASS in CI and locally.
+APK alignment verification: PASS with zipalign -c -P 16 -v 4.
+Internet permission: not requested.
+Icon: cropped bitmap from the most recent 3D money-bag mockup, not the earlier simplified vector.
+The exact source WEBP bytes are present in the APK at res/0p.webp.
+Icon SHA-256: 37054ca4cc38ff2839447fab45a26f4aebd4bceaa03ecefda8542aae25a72a5c
+
+Android 16 (API 36) x86_64 emulator results:
+1. Install old v1 debug APK: Success.
+2. Install old v1.2 as an update: INSTALL_FAILED_UPDATE_INCOMPATIBLE, signatures do not match. Problem reproduced.
+3. Install corrected release while old app remains installed: Success.
+4. Launch corrected MainActivity: Status ok, cold launch completed, process running.
+5. Switch to monthly salary tab: Korean label '이번 달 쌓인 급여' found in UI hierarchy.
+6. Reinstall corrected APK with the same signer: Success.
+7. Relaunch: process running, crash buffer empty for the app.
+
+These tests do not verify a physical Samsung phone or override its Auto Blocker, Play Protect, or device-management policy.
+New package avoids conflict without removing the old app. Salary settings are not automatically migrated; enter them again in the new app.
+This release updates installation/signing and the launcher icon. The full promotional mockup interface is not implemented.
