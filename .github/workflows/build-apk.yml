@@ -11,7 +11,6 @@ on:
   workflow_dispatch:
 permissions:
   contents: read
-  actions: read
 concurrency:
   group: salarytimer-apk
   cancel-in-progress: true
@@ -28,50 +27,33 @@ jobs:
       - uses: gradle/actions/setup-gradle@v5
         with:
           gradle-version: '8.9'
-      - name: Build non-debuggable release
-        run: gradle --no-daemon assembleRelease
-      - name: Sign release and verify APK structure
-        id: signing
-        env:
-          SALARY_KEYSTORE_BASE64: ${{ secrets.SALARY_KEYSTORE_BASE64 }}
-          SALARY_KEYSTORE_PASSWORD: ${{ secrets.SALARY_KEYSTORE_PASSWORD }}
-        run: bash scripts/sign-release.sh
-      - name: Preserve signed candidate and encrypted owner backup before emulator tests
-        if: steps.signing.outputs.signed == 'true'
-        uses: actions/upload-artifact@v4
-        with:
-          name: SalaryTimer-v1.3.0-signed-candidate
-          path: dist/
-          if-no-files-found: error
-          retention-days: 30
-      - name: Retrieve old APKs for upgrade regression test
-        if: steps.signing.outputs.signed == 'true'
-        env:
-          GH_TOKEN: ${{ github.token }}
+      - name: Unit tests and release/debug/test builds
+        run: gradle --no-daemon testDebugUnitTest assembleRelease assembleDebug assembleDebugAndroidTest
+      - name: Prepare unsigned release for existing owner's signing key
         run: |
-          gh run download 35345896885 --repo livingmetal/free --name SalaryTimer-APK --dir old/v1
-          gh run download 35346897128 --repo livingmetal/free --name SalaryTimer-APK --dir old/v12
-      - name: Test installation and screens on Android 16
-        if: steps.signing.outputs.signed == 'true'
-        run: bash scripts/smoke-test.sh
-      - name: Upload verified APK and owner-encrypted signing backup
-        if: success() && steps.signing.outputs.signed == 'true'
+          mkdir -p dist/toolchain dist/checks
+          cp app/build/outputs/apk/release/app-release-unsigned.apk dist/SalaryTimer-v1.4.0-unsigned.apk
+          BT="$(find "$ANDROID_HOME/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -1)"
+          cp "$BT/lib/apksigner.jar" "$BT/zipalign" dist/toolchain/
+          "$BT/aapt2" dump badging dist/SalaryTimer-v1.4.0-unsigned.apk > dist/checks/package.txt
+          "$BT/aapt2" dump permissions dist/SalaryTimer-v1.4.0-unsigned.apk > dist/checks/permissions.txt
+          cp -r app/build/test-results/testDebugUnitTest dist/checks/unit-tests
+      - name: Android 16 feature and migration tests
+        run: bash scripts/test-v14.sh
+      - name: Upload tested unsigned release for private local signing
+        if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: SalaryTimer-v1.3.0-verified
+          name: SalaryTimer-v1.4.0-tested-build
           path: dist/
           if-no-files-found: error
           retention-days: 30
-      - name: Upload unsigned build when signing key is not configured
-        if: success() && steps.signing.outputs.signed == 'false'
-        uses: actions/upload-artifact@v4
-        with:
-          name: UNSIGNED-not-installable
-          path: dist/UNSIGNED-requires-existing-signing-key.apk
-      - name: Upload test diagnostics on failure
+      - name: Preserve test diagnostics on failure
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: failure-diagnostics
-          path: dist/checks/
+          name: failure-diagnostics-v14
+          path: |
+            dist/checks/
+            app/build/reports/tests/
           if-no-files-found: ignore
