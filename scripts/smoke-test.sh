@@ -1,14 +1,28 @@
 #!/usr/bin/env bash
 set -euo pipefail
 mkdir -p dist/checks
+# Current cmdline-tools and emulator can use different default AVD homes.
+# Pin every relevant path and explicitly create the emulator's pointer file.
+export ANDROID_USER_HOME="$HOME/.android"
+export ANDROID_EMULATOR_HOME="$ANDROID_USER_HOME"
+export ANDROID_AVD_HOME="$ANDROID_USER_HOME/avd"
+unset ANDROID_SDK_HOME
+mkdir -p "$ANDROID_AVD_HOME"
 SDKMANAGER="$(find "$ANDROID_HOME/cmdline-tools" -path '*/bin/sdkmanager' | sort -V | tail -1)"
 AVDMANAGER="$(dirname "$SDKMANAGER")/avdmanager"
 "$SDKMANAGER" 'system-images;android-36;google_apis;x86_64' 'emulator' 'platform-tools'
-echo no | "$AVDMANAGER" create avd --force --name salarytest --package 'system-images;android-36;google_apis;x86_64'
+"$AVDMANAGER" create avd --force --name salarytest --device pixel --path "$ANDROID_AVD_HOME/salarytest.avd" --package 'system-images;android-36;google_apis;x86_64' <<< 'no'
+test -f "$ANDROID_AVD_HOME/salarytest.avd/config.ini"
+printf 'avd.ini.encoding=UTF-8\npath=%s\npath.rel=avd/salarytest.avd\ntarget=android-36\n' "$ANDROID_AVD_HOME/salarytest.avd" > "$ANDROID_AVD_HOME/salarytest.ini"
 if [[ -e /dev/kvm ]]; then sudo chmod 666 /dev/kvm; fi
 export PATH="$ANDROID_HOME/platform-tools:$ANDROID_HOME/emulator:$PATH"
-emulator -avd salarytest -no-window -no-audio -no-boot-anim -no-snapshot -gpu swiftshader_indirect -memory 2048 -cores 2 > dist/checks/emulator.log 2>&1 &
+emulator -list-avds | tee dist/checks/avd-list.txt
+grep -qx salarytest dist/checks/avd-list.txt
+emulator -avd salarytest -no-window -no-audio -no-boot-anim -no-snapshot -gpu swiftshader -memory 2048 -cores 2 > dist/checks/emulator.log 2>&1 &
+EMULATOR_PID=$!
 trap 'adb emu kill >/dev/null 2>&1 || true' EXIT
+sleep 3
+if ! kill -0 "$EMULATOR_PID" 2>/dev/null; then cat dist/checks/emulator.log; exit 1; fi
 timeout 180 adb wait-for-device
 for i in $(seq 1 120); do
   if [[ "$(adb shell getprop sys.boot_completed | tr -d '\r')" == '1' ]]; then break; fi
@@ -51,7 +65,7 @@ texts = [n.attrib.get('text','') for n in E.parse('dist/checks/monthly.xml').ite
 assert any('이번 달 쌓인 급여' in s for s in texts), texts
 print('Monthly salary screen verified')
 PY
-# Verify update/reinstallation with this release's retained signing identity.
+# Verify reinstallation with the same retained signing identity.
 adb install -r --no-streaming dist/SalaryTimer-v1.3.0.apk | tee dist/checks/new-update.txt
 grep -q Success dist/checks/new-update.txt
 adb shell am start -W -n "$COMPONENT" > dist/checks/relaunch.txt

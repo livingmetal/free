@@ -36,6 +36,14 @@ jobs:
           SALARY_KEYSTORE_BASE64: ${{ secrets.SALARY_KEYSTORE_BASE64 }}
           SALARY_KEYSTORE_PASSWORD: ${{ secrets.SALARY_KEYSTORE_PASSWORD }}
         run: bash scripts/sign-release.sh
+      - name: Preserve signed candidate and encrypted owner backup before emulator tests
+        if: steps.signing.outputs.signed == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: SalaryTimer-v1.3.0-signed-candidate
+          path: dist/
+          if-no-files-found: error
+          retention-days: 30
       - name: Retrieve old APKs for upgrade regression test
         if: steps.signing.outputs.signed == 'true'
         env:
